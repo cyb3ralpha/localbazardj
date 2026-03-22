@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Search — Local Bazar</title>
+<link rel="stylesheet" href="../assets/css/global.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+.search-page{max-width:1280px;margin:0 auto;padding:32px 24px;}
+.search-header{margin-bottom:28px;}
+.search-hero{background:var(--ink);padding:32px 24px;margin-bottom:0;}
+.search-hero-inner{max-width:1280px;margin:0 auto;}
+.search-hero h1{font-size:1.4rem;color:#fff;margin-bottom:16px;}
+.results-layout{display:grid;grid-template-columns:280px 1fr;gap:28px;margin-top:28px;}
+.filters-panel{background:var(--white);border-radius:var(--radius);border:1px solid var(--border);padding:20px;position:sticky;top:80px;max-height:calc(100vh - 120px);overflow-y:auto;}
+.filter-title{font-family:'Syne',sans-serif;font-size:.875rem;font-weight:700;margin-bottom:12px;color:var(--slate);text-transform:uppercase;letter-spacing:.06em;}
+.results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+.result-tabs{display:flex;background:var(--surface);border-radius:50px;padding:4px;gap:4px;}
+.result-tab{padding:8px 20px;border-radius:50px;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--muted);transition:var(--trans);}
+.result-tab.active{background:var(--white);color:var(--saffron);box-shadow:var(--shadow);}
+.product-list-item{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;gap:16px;transition:var(--trans);cursor:pointer;}
+.product-list-item:hover{border-color:var(--saffron);box-shadow:var(--shadow);}
+.product-thumb{width:80px;height:80px;border-radius:var(--radius-sm);background:var(--surface);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:2rem;}
+.product-info{flex:1;}
+.product-name{font-family:'Syne',sans-serif;font-weight:700;margin-bottom:4px;}
+.product-shop{font-size:.8rem;color:var(--emerald);font-weight:600;}
+.product-meta{display:flex;gap:12px;align-items:center;margin-top:8px;flex-wrap:wrap;}
+.split-view{display:grid;grid-template-columns:1fr 400px;gap:20px;}
+#search-map{height:600px;border-radius:var(--radius);border:1px solid var(--border);position:sticky;top:80px;}
+@media(max-width:900px){.results-layout{grid-template-columns:1fr;}.filters-panel{position:static;max-height:none;}.split-view{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="navbar-inner">
+    <a href="../index.html" class="navbar-logo">🛒 Local<span>Bazar</span></a>
+    <div class="navbar-links"><a href="../index.html">Home</a><a href="search.html" class="active">Search</a><a href="map.html">Map</a></div>
+    <div class="navbar-actions" id="nav-actions"><a href="login.html" class="btn-nav-login">Sign In</a></div>
+  </div>
+</nav>
+
+<div class="search-hero">
+  <div class="search-hero-inner">
+    <h1>🔍 Search Products & Shops</h1>
+    <div class="search-bar" style="max-width:700px;">
+      <input type="text" id="search-input" placeholder="Search for rice, phones, medicine, clothes…" onkeydown="if(event.key==='Enter')doSearch()">
+      <button onclick="doSearch()">Search</button>
+    </div>
+  </div>
+</div>
+
+<div class="search-page">
+  <div class="results-layout">
+    <!-- Filters -->
+    <div class="filters-panel">
+      <div class="filter-title">📍 Location</div>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px;" onclick="getLocation()">📡 Use My Location</button>
+      <div id="loc-info" style="font-size:.78rem;color:var(--muted);margin-bottom:16px;"></div>
+
+      <div class="filter-title" style="margin-top:8px;">📏 Distance</div>
+      <div class="form-group">
+        <select class="form-control form-select" id="radius" onchange="doSearch()">
+          <option value="2">2 km</option><option value="5" selected>5 km</option>
+          <option value="10">10 km</option><option value="50">50 km</option>
+        </select>
+      </div>
+
+      <div class="filter-title">🗂️ Category</div>
+      <div id="cat-filters" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;"></div>
+
+      <div class="filter-title">💰 Price Range</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+        <input type="number" id="min-price" class="form-control" placeholder="Min ₨" onchange="doSearch()">
+        <input type="number" id="max-price" class="form-control" placeholder="Max ₨" onchange="doSearch()">
+      </div>
+
+      <div class="filter-title">📦 Availability</div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.875rem;margin-bottom:16px;">
+        <input type="checkbox" id="in-stock" onchange="doSearch()"> In Stock Only
+      </label>
+
+      <button class="btn btn-ghost btn-sm" style="width:100%;" onclick="clearFilters()">Clear Filters</button>
+    </div>
+
+    <!-- Results -->
+    <div>
+      <div class="results-header">
+        <div>
+          <span id="results-count" style="font-weight:700;font-size:1rem;"></span>
+          <span id="search-query-label" style="color:var(--muted);font-size:.875rem;"></span>
+        </div>
+        <div class="result-tabs">
+          <div class="result-tab active" onclick="setView('list',this)">☰ List</div>
+          <div class="result-tab" onclick="setView('map',this)">🗺️ Map</div>
+        </div>
+      </div>
+
+      <div id="list-view">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+      <div id="map-view" style="display:none;">
+        <div class="split-view">
+          <div id="map-results"></div>
+          <div id="search-map"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../assets/js/config.js"></script>
+<script>
+let userLat,userLng,smap,smarkers=[],currentView='list',allResults=[];
+
+// Nav init
+(function(){
+  const user=Auth.getUser();
+  if(user){
+    document.getElementById('nav-actions').innerHTML=`<div class="user-avatar" onclick="window.location.href='${user.role==='seller'?'seller-dashboard.html':user.role==='admin'?'admin-dashboard.html':'../index.html'}">${user.username[0].toUpperCase()}</div>`;
+  }
+})();
+
+// Parse URL param
+const urlQ=new URLSearchParams(location.search).get('q')||'';
+if(urlQ) document.getElementById('search-input').value=urlQ;
+
+function getLocation(){
+  navigator.geolocation.getCurrentPosition(pos=>{
+    userLat=pos.coords.latitude; userLng=pos.coords.longitude;
+    document.getElementById('loc-info').textContent=`📍 Lat: ${userLat.toFixed(4)}, Lng: ${userLng.toFixed(4)}`;
+    if(smap) smap.setView([userLat,userLng],13);
+    doSearch();
+  }, ()=>{ document.getElementById('loc-info').textContent='Location unavailable'; });
+}
+
+async function loadCategories(){
+  const r=await apiCall('/categories/');
+  if(!r||!r.ok) return;
+  const cats=r.data.results||r.data;
+  document.getElementById('cat-filters').innerHTML=`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.875rem;"><input type="radio" name="cat" value="" checked onchange="doSearch()"> All Categories</label>`
+    +cats.map(c=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.875rem;"><input type="radio" name="cat" value="${c.slug}" onchange="doSearch()"> ${c.icon} ${c.name}</label>`).join('');
+}
+
+async function doSearch(){
+  const q=document.getElementById('search-input').value.trim();
+  const radius=document.getElementById('radius').value;
+  const minP=document.getElementById('min-price').value;
+  const maxP=document.getElementById('max-price').value;
+  const inStock=document.getElementById('in-stock').checked;
+  const cat=document.querySelector('input[name="cat"]:checked')?.value||'';
+
+  let url=`/search/?radius=${radius}`;
+  if(q) url+=`&q=${encodeURIComponent(q)}`;
+  if(userLat) url+=`&lat=${userLat}&lng=${userLng}`;
+  if(minP) url+=`&min_price=${minP}`;
+  if(maxP) url+=`&max_price=${maxP}`;
+  if(inStock) url+=`&in_stock=true`;
+  if(cat) url+=`&category=${cat}`;
+
+  document.getElementById('list-view').innerHTML='<div class="loading-center"><div class="spinner"></div></div>';
+  const r=await apiCall(url);
+  if(!r||!r.ok){ renderEmpty('API connection error'); return; }
+
+  allResults=r.data.results||r.data;
+  document.getElementById('results-count').textContent=`${r.data.count||allResults.length} results`;
+  document.getElementById('search-query-label').textContent=q?` for "${q}"`:'';
+  renderResults();
+}
+
+function renderResults(){
+  if(!allResults.length){ renderEmpty('No products found. Try different keywords or expand the search radius.'); return; }
+  const items=allResults.map(p=>`
+    <div class="product-list-item" onclick="window.location.href='shop.html?id=${p.shop}'">
+      <div class="product-thumb">${getCatEmoji(p.category_name)}</div>
+      <div class="product-info">
+        <div class="product-name">${p.name}</div>
+        <div class="product-shop">🏪 ${p.shop_name}</div>
+        <div class="product-meta">
+          <span style="font-weight:700;color:var(--saffron);font-size:1.05rem;">${formatPrice(p.price)}</span>
+          <span class="badge-stock ${p.in_stock?'in':'out'}">${p.in_stock?'✓ In Stock':'✗ Out of Stock'}</span>
+          ${p.distance?`<span class="distance-tag">📏 ${formatDist(p.distance)}</span>`:''}
+          ${p.shop_is_verified?'<span class="badge badge-green">Verified Shop</span>':''}
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px;">
+          <a href="shop.html?id=${p.shop}" class="btn btn-primary btn-sm">View Shop</a>
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${p.shop_lat},${p.shop_lng}" target="_blank" class="btn btn-outline btn-sm">🧭 Directions</a>
+          ${p.shop_phone?`<a href="tel:${p.shop_phone}" class="btn btn-ghost btn-sm">📞 Call</a>`:''}
+        </div>
+      </div>
+    </div>`).join('<div style="height:12px"></div>');
+  document.getElementById('list-view').innerHTML=items;
+  document.getElementById('map-results').innerHTML=items;
+  updateMapMarkers();
+}
+
+function renderEmpty(msg){
+  const html=`<div class="empty-state"><div class="icon">🔍</div><h3>No results</h3><p>${msg}</p></div>`;
+  document.getElementById('list-view').innerHTML=html;
+  document.getElementById('map-results').innerHTML=html;
+}
+
+function getCatEmoji(cat){
+  const m={'Grocery':'🛒','Electronics':'📱','Clothing':'👕','Food':'🍕','Pharmacy':'💊','Books':'📚'};
+  return m[cat]||'📦';
+}
+
+function setView(v,tab){
+  currentView=v;
+  document.querySelectorAll('.result-tab').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
+  document.getElementById('list-view').style.display=v==='list'?'block':'none';
+  document.getElementById('map-view').style.display=v==='map'?'block':'none';
+  if(v==='map'&&!smap) initSearchMap();
+}
+
+function initSearchMap(){
+  smap=L.map('search-map').setView([userLat||33.7294,userLng||73.0931],12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(smap);
+  updateMapMarkers();
+}
+
+function updateMapMarkers(){
+  if(!smap) return;
+  smarkers.forEach(m=>m.remove()); smarkers=[];
+  allResults.forEach(p=>{
+    if(!p.shop_lat) return;
+    const m=L.marker([p.shop_lat,p.shop_lng]).addTo(smap);
+    m.bindPopup(`<div class="map-popup"><h4>${p.shop_name}</h4><p>${p.name} — ${formatPrice(p.price)}</p><a href="shop.html?id=${p.shop}">View Shop →</a></div>`);
+    smarkers.push(m);
+  });
+}
+
+function clearFilters(){
+  document.getElementById('search-input').value='';
+  document.getElementById('radius').value='5';
+  document.getElementById('min-price').value='';
+  document.getElementById('max-price').value='';
+  document.getElementById('in-stock').checked=false;
+  const all=document.querySelector('input[name="cat"][value=""]');
+  if(all) all.checked=true;
+  doSearch();
+}
+
+loadCategories();
+doSearch();
+getLocation();
+</script>
+</body>
+</html>

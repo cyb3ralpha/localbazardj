@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local Bazar — Find Products Near You</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+<link rel="stylesheet" href="assets/css/global.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+.hero{background:linear-gradient(135deg,#0F1117 0%,#1E2230 50%,#2D1B00 100%);padding:80px 24px;text-align:center;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(255,107,43,0.15) 0%,transparent 60%),radial-gradient(ellipse at 70% 30%,rgba(26,122,94,0.1) 0%,transparent 50%);}
+.hero-content{position:relative;max-width:760px;margin:0 auto;}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(255,107,43,0.15);border:1px solid rgba(255,107,43,0.3);color:#FF8C55;padding:6px 16px;border-radius:50px;font-size:.8rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:24px;}
+.hero h1{font-size:clamp(2.2rem,5vw,3.8rem);color:#fff;margin-bottom:20px;line-height:1.1;}
+.hero h1 span{color:var(--saffron);}
+.hero p{color:rgba(255,255,255,.65);font-size:1.1rem;margin-bottom:40px;max-width:520px;margin-left:auto;margin-right:auto;}
+.hero-search{max-width:640px;margin:0 auto 32px;}
+.hero-search .search-bar{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);backdrop-filter:blur(12px);}
+.hero-search .search-bar input{color:#fff;}
+.hero-search .search-bar input::placeholder{color:rgba(255,255,255,.4);}
+.hero-stats{display:flex;justify-content:center;gap:48px;margin-top:48px;}
+.hero-stat .num{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:#fff;}
+.hero-stat .lbl{font-size:.8rem;color:rgba(255,255,255,.45);margin-top:2px;}
+.location-bar{background:var(--saffron-pale);border-bottom:1px solid rgba(255,107,43,.2);padding:10px 24px;}
+.location-bar-inner{max-width:1280px;margin:0 auto;display:flex;align-items:center;gap:12px;font-size:.85rem;}
+.loc-btn{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--saffron);cursor:pointer;background:none;border:none;font-family:inherit;font-size:.85rem;}
+#loc-status{color:var(--muted);}
+.section{padding:64px 24px;}
+.section-inner{max-width:1280px;margin:0 auto;}
+.section-header{margin-bottom:36px;}
+.section-header h2{font-size:1.8rem;}
+.section-header p{color:var(--muted);margin-top:8px;}
+.split-layout{display:grid;grid-template-columns:1fr 420px;gap:32px;align-items:start;}
+.filters-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:24px;}
+.filter-select{padding:8px 14px;border:1.5px solid var(--border);border-radius:50px;font-size:.82rem;font-weight:500;color:var(--slate);outline:none;cursor:pointer;transition:var(--trans);}
+.filter-select:focus{border-color:var(--saffron);}
+.results-count{font-size:.85rem;color:var(--muted);margin-left:auto;}
+#results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:20px;}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;}
+.cat-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);padding:24px 16px;text-align:center;cursor:pointer;transition:var(--trans);}
+.cat-card:hover{border-color:var(--saffron);background:var(--saffron-pale);transform:translateY(-3px);}
+.cat-card .ico{font-size:2rem;margin-bottom:10px;}
+.cat-card .name{font-weight:600;font-size:.875rem;}
+.how-step{text-align:center;padding:32px 24px;}
+.how-step .step-num{width:48px;height:48px;border-radius:50%;background:var(--saffron);color:#fff;font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
+.how-step h3{font-size:1rem;margin-bottom:8px;}
+.how-step p{font-size:.85rem;color:var(--muted);}
+.footer{background:var(--ink);color:rgba(255,255,255,.6);padding:48px 24px;text-align:center;}
+.footer-logo{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--saffron);margin-bottom:8px;}
+@media(max-width:900px){.split-layout{grid-template-columns:1fr;} #map-panel{display:none;}}
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="navbar-inner">
+    <a href="index.html" class="navbar-logo">🛒 Local<span>Bazar</span></a>
+    <div class="navbar-links">
+      <a href="index.html" class="active">Home</a>
+      <a href="pages/search.html">Search</a>
+      <a href="pages/map.html">Map</a>
+    </div>
+    <div class="navbar-actions" id="nav-actions">
+      <a href="pages/login.html" class="btn-nav-login">Sign In</a>
+    </div>
+  </div>
+</nav>
+
+<!-- LOCATION BAR -->
+<div class="location-bar">
+  <div class="location-bar-inner">
+    <span>📍</span>
+    <span id="loc-status">Enable location for nearby results</span>
+    <button class="loc-btn" onclick="getLocation()">📡 Use My Location</button>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-eyebrow">🔥 Pakistan's Local Discovery Platform</div>
+    <h1>Find <span>Any Product</span><br>Near You — Instantly</h1>
+    <p>Search products, discover local shops on the map, and get real-time directions. No delivery wait — just walk in.</p>
+    <div class="hero-search">
+      <div class="search-bar">
+        <input type="text" id="hero-search-input" placeholder="Search for milk, electronics, medicine…" onkeydown="if(event.key==='Enter')heroSearch()">
+        <button onclick="heroSearch()">🔍 Search</button>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num" id="stat-shops">—</div><div class="lbl">Local Shops</div></div>
+      <div class="hero-stat"><div class="num" id="stat-products">—</div><div class="lbl">Products Listed</div></div>
+      <div class="hero-stat"><div class="num" id="stat-cities">4+</div><div class="lbl">Cities</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CATEGORIES -->
+<section class="section" style="background:var(--surface);">
+  <div class="section-inner">
+    <div class="section-header"><h2>Browse by Category</h2><p>Explore local shops by what you need</p></div>
+    <div class="cat-grid" id="cat-grid">
+      <div class="loading-center"><div class="spinner"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- NEARBY + MAP SPLIT -->
+<section class="section">
+  <div class="section-inner">
+    <div class="section-header flex-between">
+      <div><h2>Nearby Shops</h2><p>Shops closest to your location</p></div>
+      <a href="pages/map.html" class="btn btn-outline btn-sm">View Full Map →</a>
+    </div>
+    <div class="filters-row">
+      <div class="chips" id="cat-chips"></div>
+      <select class="filter-select" id="radius-select" onchange="loadNearby()">
+        <option value="2">Within 2km</option>
+        <option value="5" selected>Within 5km</option>
+        <option value="10">Within 10km</option>
+        <option value="50">Within 50km</option>
+      </select>
+      <span class="results-count" id="results-count"></span>
+    </div>
+    <div class="split-layout">
+      <div id="results-grid"><div class="loading-center"><div class="spinner"></div></div></div>
+      <div id="map-panel">
+        <div class="map-container"><div id="map"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" style="background:var(--ink);">
+  <div class="section-inner">
+    <div class="section-header" style="text-align:center;"><h2 style="color:#fff;">How Local Bazar Works</h2></div>
+    <div class="grid-3">
+      <div class="how-step"><div class="step-num">1</div><h3 style="color:#fff;">Search a Product</h3><p>Type what you're looking for — rice, headphones, paracetamol, anything.</p></div>
+      <div class="how-step"><div class="step-num">2</div><h3 style="color:#fff;">See Nearby Shops</h3><p>We instantly show which local shops near you have it in stock.</p></div>
+      <div class="how-step"><div class="step-num">3</div><h3 style="color:#fff;">Get Directions</h3><p>One tap opens live navigation. Walk or drive right to the shop.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-logo">🛒 LocalBazar</div>
+  <p style="margin-bottom:16px;">Connecting local buyers with local sellers.</p>
+  <div style="display:flex;gap:24px;justify-content:center;font-size:.85rem;">
+    <a href="pages/login.html" style="color:rgba(255,255,255,.5);">Sign In</a>
+    <a href="pages/register.html" style="color:rgba(255,255,255,.5);">Register</a>
+    <a href="pages/seller-dashboard.html" style="color:rgba(255,255,255,.5);">Seller Dashboard</a>
+  </div>
+  <p style="margin-top:24px;font-size:.75rem;color:rgba(255,255,255,.25);">© 2024 Local Bazar. Built for Pakistan.</p>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/js/config.js"></script>
+<script>
+let map, userLat, userLng, markers=[], activeCat='';
+
+// Nav
+(function initNav(){
+  const user = Auth.getUser();
+  if(user){
+    const el = document.getElementById('nav-actions');
+    el.innerHTML = `<div style="position:relative">
+      <div class="user-avatar" onclick="document.getElementById('umenu').classList.toggle('open')">${user.username[0].toUpperCase()}</div>
+      <div class="user-menu" id="umenu">
+        ${user.role==='seller'?`<a href="pages/seller-dashboard.html">🏪 My Dashboard</a>`:''}
+        ${['admin','employee'].includes(user.role)?`<a href="pages/admin-dashboard.html">⚙️ Admin Panel</a>`:''}
+        <div class="menu-divider"></div>
+        <button onclick="Auth.logout()">🚪 Logout</button>
+      </div>
+    </div>`;
+  }
+})();
+
+function heroSearch(){
+  const q = document.getElementById('hero-search-input').value.trim();
+  if(!q) return;
+  window.location.href = `pages/search.html?q=${encodeURIComponent(q)}`;
+}
+
+function getLocation(){
+  navigator.geolocation.getCurrentPosition(pos=>{
+    userLat=pos.coords.latitude; userLng=pos.coords.longitude;
+    document.getElementById('loc-status').textContent=`📍 Location found — showing nearby results`;
+    loadNearby();
+    if(map) map.setView([userLat,userLng],14);
+  }, ()=>{ document.getElementById('loc-status').textContent='Location unavailable — showing all shops'; });
+}
+
+function initMap(){
+  map = L.map('map').setView([33.7294,73.0931],12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+}
+
+async function loadCategories(){
+  const r = await apiCall('/categories/');
+  if(!r||!r.ok) return;
+  const cats = r.data.results || r.data;
+  document.getElementById('cat-grid').innerHTML = cats.map(c=>`
+    <div class="cat-card" onclick="filterByCat('${c.slug}')">
+      <div class="ico">${c.icon}</div><div class="name">${c.name}</div>
+    </div>`).join('');
+  document.getElementById('cat-chips').innerHTML = `<div class="chip active" onclick="filterByCat('')">All</div>`
+    + cats.map(c=>`<div class="chip" onclick="filterByCat('${c.slug}')">${c.icon} ${c.name}</div>`).join('');
+  // stats
+  document.getElementById('stat-products').textContent = (cats.length * 8) + '+';
+}
+
+function filterByCat(slug){
+  activeCat = slug;
+  document.querySelectorAll('#cat-chips .chip').forEach(c=>c.classList.remove('active'));
+  const target = [...document.querySelectorAll('#cat-chips .chip')].find(c=>c.textContent.includes(slug)||slug==='');
+  if(target) target.classList.add('active');
+  loadNearby();
+}
+
+async function loadNearby(){
+  const radius = document.getElementById('radius-select').value;
+  let url = `/shops/nearby/?radius=${radius}`;
+  if(userLat) url += `&lat=${userLat}&lng=${userLng}`;
+  if(activeCat) url += `&category=${activeCat}`;
+  
+  document.getElementById('results-grid').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  const r = await apiCall(url);
+  if(!r||!r.ok){ document.getElementById('results-grid').innerHTML='<div class="empty-state"><div class="icon">⚠️</div><h3>Could not load shops</h3><p>Make sure the backend is running</p></div>'; return; }
+  
+  const shops = r.data.results||r.data;
+  document.getElementById('stat-shops').textContent = r.data.count||shops.length;
+  document.getElementById('results-count').textContent = `${shops.length} shops found`;
+  
+  // Clear map markers
+  markers.forEach(m=>m.remove()); markers=[];
+  
+  if(!shops.length){
+    document.getElementById('results-grid').innerHTML='<div class="empty-state"><div class="icon">🏪</div><h3>No shops nearby</h3><p>Try increasing the search radius</p></div>';
+    return;
+  }
+  
+  document.getElementById('results-grid').innerHTML = shops.map(s=>`
+    <div class="card" style="cursor:pointer" onclick="window.location.href='pages/shop.html?id=${s.id}'">
+      <div style="height:140px;background:linear-gradient(135deg,#FF6B2B22,#1A7A5E22);display:flex;align-items:center;justify-content:center;font-size:3rem;">🏪</div>
+      <div class="card-body">
+        <div style="display:flex;align-items:start;justify-content:space-between;gap:8px;margin-bottom:8px;">
+          <div class="card-title" style="margin:0">${s.name}</div>
+          ${s.is_verified?'<span class="badge-verified" title="Verified">✓</span>':''}
+        </div>
+        <div class="card-meta" style="flex-direction:column;align-items:start;gap:6px;">
+          <span>📍 ${s.address}</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span>${starRating(s.avg_rating)} <small style="color:var(--muted)">(${s.review_count})</small></span>
+            ${s.distance?`<span class="distance-tag">📏 ${formatDist(s.distance)}</span>`:''}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <span class="badge badge-gray">${s.product_count||0} products</span>
+            ${s.is_verified?'<span class="badge badge-green">Verified</span>':'<span class="badge badge-yellow">Pending</span>'}
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;">
+          <a href="pages/shop.html?id=${s.id}" class="btn btn-primary btn-sm" style="flex:1;justify-content:center">View Shop</a>
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}" target="_blank" class="btn btn-outline btn-sm">🧭</a>
+        </div>
+      </div>
+    </div>`).join('');
+
+  // Add map markers
+  shops.forEach(s=>{
+    if(!map) return;
+    const icon = L.divIcon({className:'',html:`<div style="background:var(--saffron);color:#fff;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.2)">${s.name}</div>`,iconAnchor:[0,0]});
+    const m = L.marker([s.latitude,s.longitude],{icon}).addTo(map);
+    m.bindPopup(`<div class="map-popup"><h4>${s.name}</h4><p>📍 ${s.address}${s.distance?` · ${formatDist(s.distance)}`:''}</p><a href="pages/shop.html?id=${s.id}">View Shop →</a></div>`);
+    markers.push(m);
+  });
+}
+
+function starRating(r){let h='';for(let i=1;i<=5;i++)h+=`<span style="color:${i<=r?'#F59E0B':'#ddd'}">★</span>`;return h;}
+
+// Init
+initMap();
+loadCategories();
+loadNearby();
+getLocation();
+</script>
+</body>
+</html>

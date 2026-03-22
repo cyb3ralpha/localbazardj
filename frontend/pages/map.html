@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Map — Local Bazar</title>
+<link rel="stylesheet" href="../assets/css/global.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+body{overflow:hidden;}
+.map-page{display:flex;flex-direction:column;height:100vh;}
+.map-toolbar{background:var(--white);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:50;}
+#fullmap{flex:1;}
+.map-sidebar{position:absolute;top:130px;right:20px;width:320px;background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);max-height:calc(100vh - 160px);overflow-y:auto;z-index:400;}
+.map-sidebar-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.shop-list-item{padding:14px 20px;border-bottom:1px solid var(--surface);cursor:pointer;transition:var(--trans);}
+.shop-list-item:hover{background:var(--saffron-pale);}
+.shop-list-item h4{font-family:'Syne',sans-serif;font-size:.875rem;margin-bottom:2px;}
+.shop-list-item p{font-size:.75rem;color:var(--muted);}
+.pulse-marker{width:16px;height:16px;background:var(--saffron);border-radius:50%;box-shadow:0 0 0 4px rgba(255,107,43,.3);}
+</style>
+</head>
+<body>
+<div class="map-page">
+  <div class="navbar" style="position:relative;">
+    <div class="navbar-inner">
+      <a href="../index.html" class="navbar-logo">🛒 Local<span>Bazar</span></a>
+      <div class="navbar-links"><a href="../index.html">Home</a><a href="search.html">Search</a><a href="map.html" class="active">Map</a></div>
+    </div>
+  </div>
+  <div class="map-toolbar">
+    <div class="search-bar" style="max-width:320px;margin:0;">
+      <input type="text" id="map-search" placeholder="Search on map…" onkeydown="if(event.key==='Enter')mapSearch()">
+      <button onclick="mapSearch()">🔍</button>
+    </div>
+    <select class="filter-select" id="map-radius" onchange="loadShops()">
+      <option value="5">5km</option><option value="10" selected>10km</option><option value="25">25km</option><option value="100">All</option>
+    </select>
+    <select class="filter-select" id="map-cat" onchange="loadShops()">
+      <option value="">All Categories</option>
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="locateMe()">📡 My Location</button>
+    <span id="shop-count" style="font-size:.8rem;color:var(--muted);"></span>
+  </div>
+  <div style="position:relative;flex:1;">
+    <div id="fullmap" style="height:100%;width:100%;"></div>
+    <div class="map-sidebar" id="map-sidebar">
+      <div class="map-sidebar-header">
+        <h3 style="font-family:'Syne',sans-serif;font-size:1rem;">Nearby Shops</h3>
+        <button onclick="document.getElementById('map-sidebar').style.display='none'" style="color:var(--muted);">✕</button>
+      </div>
+      <div id="sidebar-list"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../assets/js/config.js"></script>
+<script>
+let fmap, userLat=33.7294, userLng=73.0931, markers=[];
+
+const fmap_ = L.map('fullmap').setView([userLat,userLng],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(fmap_);
+fmap = fmap_;
+
+async function loadCategories(){
+  const r=await apiCall('/categories/');
+  if(!r||!r.ok) return;
+  const cats=r.data.results||r.data;
+  const sel=document.getElementById('map-cat');
+  cats.forEach(c=>{ const o=document.createElement('option'); o.value=c.slug; o.textContent=c.icon+' '+c.name; sel.appendChild(o); });
+}
+
+async function loadShops(){
+  const radius=document.getElementById('map-radius').value;
+  const cat=document.getElementById('map-cat').value;
+  const q=document.getElementById('map-search').value.trim();
+  let url=`/shops/nearby/?lat=${userLat}&lng=${userLng}&radius=${radius}`;
+  if(cat) url+=`&category=${cat}`;
+
+  markers.forEach(m=>m.remove()); markers=[];
+  const r=await apiCall(url);
+  if(!r||!r.ok) return;
+  const shops=r.data.results||r.data;
+
+  let filtered=shops;
+  if(q) filtered=shops.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())||s.address.toLowerCase().includes(q.toLowerCase()));
+
+  document.getElementById('shop-count').textContent=`${filtered.length} shops`;
+  document.getElementById('sidebar-list').innerHTML=filtered.length?
+    filtered.map(s=>`<div class="shop-list-item" onclick="focusShop(${s.latitude},${s.longitude},'${s.name}',${s.id})">
+      <h4>${s.name} ${s.is_verified?'✓':''}</h4>
+      <p>📍 ${s.address} ${s.distance?'· '+formatDist(s.distance):''}</p>
+      <p>${starRating(s.avg_rating)} ${s.avg_rating} (${s.review_count})</p>
+    </div>`).join(''):
+    '<div class="empty-state"><div class="icon">🗺️</div><h3>No shops found</h3></div>';
+
+  filtered.forEach(s=>{
+    const icon=L.divIcon({className:'',html:`<div style="background:${s.is_verified?'var(--emerald)':'var(--saffron)'};color:#fff;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer">${s.is_verified?'✓ ':''} ${s.name}</div>`,iconAnchor:[0,0]});
+    const m=L.marker([s.latitude,s.longitude],{icon}).addTo(fmap_);
+    m.bindPopup(`<div class="map-popup">
+      <h4>${s.name}</h4>
+      <p>📍 ${s.address}${s.distance?' · '+formatDist(s.distance):''}</p>
+      <p>${starRating(s.avg_rating)} ${s.avg_rating} (${s.review_count} reviews)</p>
+      <div style="margin-top:8px;display:flex;gap:8px;">
+        <a href="shop.html?id=${s.id}" style="background:var(--saffron);color:#fff;padding:6px 12px;border-radius:50px;font-size:.78rem;font-weight:600;">View Shop</a>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}" target="_blank" style="background:var(--ink);color:#fff;padding:6px 12px;border-radius:50px;font-size:.78rem;font-weight:600;">Directions</a>
+      </div>
+    </div>`);
+    markers.push(m);
+  });
+}
+
+function starRating(r){let h='';for(let i=1;i<=5;i++)h+=`<span style="color:${i<=r?'#F59E0B':'#ddd'}">★</span>`;return h;}
+
+function focusShop(lat,lng,name,id){
+  fmap_.setView([lat,lng],16);
+  markers.forEach(m=>{ try{ if(m.getLatLng().lat==lat) m.openPopup(); }catch(e){} });
+}
+
+function locateMe(){
+  navigator.geolocation.getCurrentPosition(pos=>{
+    userLat=pos.coords.latitude; userLng=pos.coords.longitude;
+    fmap_.setView([userLat,userLng],14);
+    L.circleMarker([userLat,userLng],{radius:10,fillColor:'#3B82F6',color:'#fff',weight:3,fillOpacity:.9}).addTo(fmap_).bindPopup('📍 You are here').openPopup();
+    loadShops();
+  }, ()=>showToast('Location unavailable','error'));
+}
+
+function mapSearch(){ loadShops(); }
+
+loadCategories();
+loadShops();
+</script>
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Seller Dashboard — Local Bazar</title>
+<link rel="stylesheet" href="../assets/css/global.css">
+<style>
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity .2s;}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal{background:#fff;border-radius:20px;width:90%;max-width:540px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);transform:translateY(20px);transition:transform .25s;}
+.modal-overlay.open .modal{transform:translateY(0);}
+.modal-header{padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.modal-body{padding:0 24px 24px;}
+</style>
+</head>
+<body>
+<div class="dashboard-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">🛒 LocalBazar<span>Seller Dashboard</span></div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Main</div>
+        <button class="sidebar-link active" onclick="showTab('overview',this)"><span class="icon">📊</span> Overview</button>
+        <button class="sidebar-link" onclick="showTab('shops',this)"><span class="icon">🏪</span> My Shops</button>
+        <button class="sidebar-link" onclick="showTab('products',this)"><span class="icon">📦</span> Products</button>
+        <button class="sidebar-link" onclick="showTab('reviews',this)"><span class="icon">⭐</span> Reviews</button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Account</div>
+        <a class="sidebar-link" href="../index.html"><span class="icon">🏠</span> Back to Site</a>
+        <button class="sidebar-link" onclick="Auth.logout()"><span class="icon">🚪</span> Logout</button>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div style="font-size:.75rem;color:rgba(255,255,255,.3);" id="seller-info">Loading…</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-content">
+    <!-- Overview -->
+    <div id="tab-overview">
+      <div class="page-header"><div class="page-title">Welcome back! 👋</div><div class="page-subtitle" id="seller-name-sub"></div></div>
+      <div class="grid-4" style="margin-bottom:28px;" id="overview-stats">
+        <div class="stat-card"><div class="stat-icon" style="background:#FFF0E8">🏪</div><div><div class="stat-value" id="st-shops">—</div><div class="stat-label">My Shops</div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#E8F5F0">📦</div><div><div class="stat-value" id="st-products">—</div><div class="stat-label">Products</div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#FEF3C7">⭐</div><div><div class="stat-value" id="st-rating">—</div><div class="stat-label">Avg Rating</div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#DBEAFE">💬</div><div><div class="stat-value" id="st-reviews">—</div><div class="stat-label">Reviews</div></div></div>
+      </div>
+      <div class="card" style="padding:24px;">
+        <h3 style="font-family:'Syne',sans-serif;margin-bottom:16px;">Quick Actions</h3>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="openShopModal()">+ Add New Shop</button>
+          <button class="btn btn-outline" onclick="showTab('products',null);openProductModal()">+ Add Product</button>
+          <a href="search.html" class="btn btn-ghost">🔍 Browse Platform</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shops -->
+    <div id="tab-shops" style="display:none;">
+      <div class="page-header flex-between">
+        <div><div class="page-title">My Shops</div><div class="page-subtitle">Manage your shop listings</div></div>
+        <button class="btn btn-primary" onclick="openShopModal()">+ Add Shop</button>
+      </div>
+      <div id="shops-list"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- Products -->
+    <div id="tab-products" style="display:none;">
+      <div class="page-header flex-between">
+        <div><div class="page-title">Products</div><div class="page-subtitle">Manage your product listings</div></div>
+        <button class="btn btn-primary" onclick="openProductModal()">+ Add Product</button>
+      </div>
+      <div class="filters-row" style="margin-bottom:20px;">
+        <select class="filter-select" id="shop-filter" onchange="loadProducts()"><option value="">All Shops</option></select>
+        <select class="filter-select" onchange="filterProductStock(this.value)"><option value="">All</option><option value="true">In Stock</option><option value="false">Out of Stock</option></select>
+      </div>
+      <div class="table-wrap">
+        <table id="products-table">
+          <thead><tr><th>Product</th><th>Shop</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead>
+          <tbody id="products-tbody"><tr><td colspan="5" style="text-align:center;padding:32px;"><div class="spinner" style="margin:auto;"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Reviews -->
+    <div id="tab-reviews" style="display:none;">
+      <div class="page-header"><div class="page-title">Customer Reviews</div></div>
+      <div id="reviews-list"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+  </main>
+</div>
+
+<!-- Shop Modal -->
+<div class="modal-overlay" id="shop-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="shop-modal-title">Add New Shop</div><button class="modal-close" onclick="closeModal('shop-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-shop-id">
+      <div class="grid-2" style="gap:12px;">
+        <div class="form-group"><label class="form-label">Shop Name *</label><input type="text" id="shop-name" class="form-control" placeholder="My Shop"></div>
+        <div class="form-group"><label class="form-label">City *</label><input type="text" id="shop-city" class="form-control" placeholder="Islamabad"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Address *</label><input type="text" id="shop-address" class="form-control" placeholder="Full address"></div>
+      <div class="grid-2" style="gap:12px;">
+        <div class="form-group"><label class="form-label">Latitude *</label><input type="number" id="shop-lat" class="form-control" placeholder="33.7294" step="any"></div>
+        <div class="form-group"><label class="form-label">Longitude *</label><input type="number" id="shop-lng" class="form-control" placeholder="73.0931" step="any"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-bottom:12px;" onclick="detectLocation()">📡 Auto-detect my location</button>
+      <div class="grid-2" style="gap:12px;">
+        <div class="form-group"><label class="form-label">Phone *</label><input type="text" id="shop-phone" class="form-control" placeholder="03001234567"></div>
+        <div class="form-group"><label class="form-label">WhatsApp</label><input type="text" id="shop-whatsapp" class="form-control" placeholder="92300..."></div>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><textarea id="shop-desc" class="form-control" rows="2" placeholder="What do you sell?"></textarea></div>
+      <div class="grid-2" style="gap:12px;">
+        <div class="form-group"><label class="form-label">Opening Time</label><input type="time" id="shop-open" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Closing Time</label><input type="time" id="shop-close" class="form-control"></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" id="shop-submit-btn" onclick="saveShop()">Save Shop</button>
+    </div>
+  </div>
+</div>
+
+<!-- Product Modal -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="product-modal-title">Add Product</div><button class="modal-close" onclick="closeModal('product-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-product-id">
+      <div class="form-group"><label class="form-label">Shop *</label>
+        <select id="product-shop" class="form-control form-select"><option value="">Select shop…</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Product Name *</label><input type="text" id="product-name" class="form-control" placeholder="Product name"></div>
+      <div class="grid-2" style="gap:12px;">
+        <div class="form-group"><label class="form-label">Price (₨) *</label><input type="number" id="product-price" class="form-control" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Quantity</label><input type="number" id="product-qty" class="form-control" placeholder="0"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><textarea id="product-desc" class="form-control" rows="2"></textarea></div>
+      <div class="form-group" style="display:flex;align-items:center;gap:12px;">
+        <input type="checkbox" id="product-instock" checked>
+        <label style="cursor:pointer;font-weight:500;">In Stock</label>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script>
+// Auth guard
+const user=Auth.getUser();
+if(!user||!['seller','admin','employee'].includes(user.role)){window.location.href='login.html';}
+document.getElementById('seller-info').textContent=user.username+' · '+user.role;
+document.getElementById('seller-name-sub').textContent=`Logged in as ${user.username} (${user.role})`;
+
+let myShops=[], allMyProducts=[];
+
+function showTab(name,btn){
+  ['overview','shops','products','reviews'].forEach(t=>document.getElementById('tab-'+t).style.display='none');
+  document.getElementById('tab-'+name).style.display='block';
+  document.querySelectorAll('.sidebar-link').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(name==='shops') loadShops();
+  if(name==='products') {loadShops();loadProducts();}
+  if(name==='reviews') loadReviews();
+}
+
+async function loadOverview(){
+  const r=await apiCall('/seller/shops/');
+  if(!r||!r.ok) return;
+  myShops=r.data.results||r.data;
+  document.getElementById('st-shops').textContent=myShops.length;
+  let totalP=0,totalRev=0,totalRating=0;
+  myShops.forEach(s=>{totalP+=(s.product_count||0);totalRev+=(s.review_count||0);totalRating+=(s.avg_rating||0);});
+  document.getElementById('st-products').textContent=totalP;
+  document.getElementById('st-reviews').textContent=totalRev;
+  document.getElementById('st-rating').textContent=myShops.length?(totalRating/myShops.length).toFixed(1):'—';
+}
+
+async function loadShops(){
+  const r=await apiCall('/seller/shops/');
+  if(!r||!r.ok) return;
+  myShops=r.data.results||r.data;
+  // Populate shop filter dropdown
+  const sel=document.getElementById('shop-filter');
+  if(sel){ sel.innerHTML='<option value="">All Shops</option>'+myShops.map(s=>`<option value="${s.id}">${s.name}</option>`).join(''); }
+  const pSel=document.getElementById('product-shop');
+  if(pSel){ pSel.innerHTML='<option value="">Select shop…</option>'+myShops.map(s=>`<option value="${s.id}">${s.name}</option>`).join(''); }
+  if(!document.getElementById('tab-shops').style.display||document.getElementById('tab-shops').style.display==='none') return;
+  if(!myShops.length){ document.getElementById('shops-list').innerHTML='<div class="empty-state"><div class="icon">🏪</div><h3>No shops yet</h3><p>Add your first shop to get started</p><button class="btn btn-primary" style="margin-top:16px" onclick="openShopModal()">+ Add Shop</button></div>'; return; }
+  document.getElementById('shops-list').innerHTML=`<div class="grid-2">${myShops.map(s=>`
+    <div class="card" style="padding:0;">
+      <div style="padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:start;">
+          <div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1.1rem;">${s.name}</div>
+            <div style="font-size:.8rem;color:var(--muted);margin-top:4px;">📍 ${s.address}</div>
+          </div>
+          <span class="badge ${s.is_verified?'badge-green':'badge-yellow'}">${s.is_verified?'Verified':'Pending'}</span>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:16px;font-size:.85rem;">
+          <span>📦 ${s.product_count||0} products</span>
+          <span>⭐ ${s.avg_rating}</span>
+          <span>💬 ${s.review_count} reviews</span>
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;">
+        <a href="shop.html?id=${s.id}" class="btn btn-ghost btn-sm">👁 View</a>
+        <button class="btn btn-outline btn-sm" onclick="editShop(${JSON.stringify(s).replace(/"/g,'&quot;')})">✏️ Edit</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+async function loadProducts(){
+  const shopId=document.getElementById('shop-filter')?.value||'';
+  let url=shopId?`/seller/shops/${shopId}/products/`:'/seller/products/';
+  const r=await apiCall(url);
+  if(!r||!r.ok) return;
+  allMyProducts=r.data.results||r.data;
+  renderProductsTable(allMyProducts);
+}
+
+function filterProductStock(val){
+  if(!val) renderProductsTable(allMyProducts);
+  else renderProductsTable(allMyProducts.filter(p=>String(p.in_stock)===val));
+}
+
+function renderProductsTable(products){
+  if(!products.length){ document.getElementById('products-tbody').innerHTML='<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted)">No products found</td></tr>'; return; }
+  document.getElementById('products-tbody').innerHTML=products.map(p=>`
+    <tr>
+      <td><div style="font-weight:600;">${p.name}</div>${p.description?`<div style="font-size:.75rem;color:var(--muted);">${p.description.substring(0,50)}</div>`:''}</td>
+      <td style="font-size:.85rem;">${p.shop_name||'—'}</td>
+      <td style="font-weight:600;color:var(--saffron);">${formatPrice(p.price)}</td>
+      <td><span class="badge-stock ${p.in_stock?'in':'out'}">${p.in_stock?'In Stock':'Out'}</span></td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="editProduct(${JSON.stringify(p).replace(/"/g,'&quot;')})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id})">Del</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function loadReviews(){
+  const revs=[];
+  for(const s of myShops){
+    const r=await apiCall(`/shops/${s.id}/reviews/`);
+    if(r&&r.ok){ (r.data.results||r.data).forEach(rv=>{rv._shop=s.name;revs.push(rv);}); }
+  }
+  if(!revs.length){ document.getElementById('reviews-list').innerHTML='<div class="empty-state"><div class="icon">⭐</div><h3>No reviews yet</h3></div>'; return; }
+  document.getElementById('reviews-list').innerHTML=`<div style="display:flex;flex-direction:column;gap:12px;">${revs.map(rv=>`
+    <div style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:start;">
+        <div><strong>${rv.username}</strong> <span style="color:var(--muted);font-size:.8rem;">on ${rv._shop}</span></div>
+        <div>${'★'.repeat(rv.rating)}${'☆'.repeat(5-rv.rating)}</div>
+      </div>
+      <p style="margin-top:8px;font-size:.875rem;color:var(--slate);">${rv.comment}</p>
+    </div>`).join('')}</div>`;
+}
+
+function openShopModal(){ document.getElementById('edit-shop-id').value=''; document.getElementById('shop-modal-title').textContent='Add New Shop'; document.getElementById('shop-modal').classList.add('open'); }
+function editShop(s){ document.getElementById('edit-shop-id').value=s.id; document.getElementById('shop-modal-title').textContent='Edit Shop'; document.getElementById('shop-name').value=s.name; document.getElementById('shop-city').value=s.city; document.getElementById('shop-address').value=s.address; document.getElementById('shop-lat').value=s.latitude; document.getElementById('shop-lng').value=s.longitude; document.getElementById('shop-phone').value=s.phone; document.getElementById('shop-whatsapp').value=s.whatsapp||''; document.getElementById('shop-desc').value=s.description||''; document.getElementById('shop-modal').classList.add('open'); }
+function openProductModal(){ document.getElementById('edit-product-id').value=''; document.getElementById('product-modal-title').textContent='Add Product'; document.getElementById('product-modal').classList.add('open'); }
+function editProduct(p){ document.getElementById('edit-product-id').value=p.id; document.getElementById('product-modal-title').textContent='Edit Product'; document.getElementById('product-name').value=p.name; document.getElementById('product-price').value=p.price; document.getElementById('product-qty').value=p.stock_quantity||0; document.getElementById('product-desc').value=p.description||''; document.getElementById('product-instock').checked=p.in_stock; document.getElementById('product-shop').value=p.shop; document.getElementById('product-modal').classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+async function saveShop(){
+  const id=document.getElementById('edit-shop-id').value;
+  const data={name:document.getElementById('shop-name').value,city:document.getElementById('shop-city').value,address:document.getElementById('shop-address').value,latitude:document.getElementById('shop-lat').value,longitude:document.getElementById('shop-lng').value,phone:document.getElementById('shop-phone').value,whatsapp:document.getElementById('shop-whatsapp').value,description:document.getElementById('shop-desc').value,opening_time:document.getElementById('shop-open').value||null,closing_time:document.getElementById('shop-close').value||null};
+  if(!data.name||!data.address||!data.latitude||!data.phone){showToast('Fill required fields','error');return;}
+  const url=id?`/seller/shops/${id}/`:'/seller/shops/';
+  const method=id?'PUT':'POST';
+  const r=await apiCall(url,method,data);
+  if(!r||!r.ok){showToast(Object.values(r?.data||{}).flat().join(' ')||'Error','error');return;}
+  showToast(id?'Shop updated!':'Shop created! 🏪');
+  closeModal('shop-modal'); loadShops(); loadOverview();
+}
+
+async function saveProduct(){
+  const id=document.getElementById('edit-product-id').value;
+  const data={shop:document.getElementById('product-shop').value,name:document.getElementById('product-name').value,price:document.getElementById('product-price').value,stock_quantity:document.getElementById('product-qty').value,description:document.getElementById('product-desc').value,in_stock:document.getElementById('product-instock').checked};
+  if(!data.shop||!data.name||!data.price){showToast('Fill required fields','error');return;}
+  const url=id?`/seller/products/${id}/`:'/seller/products/';
+  const method=id?'PUT':'POST';
+  const r=await apiCall(url,method,data);
+  if(!r||!r.ok){showToast('Error saving product','error');return;}
+  showToast(id?'Product updated!':'Product added! 📦');
+  closeModal('product-modal'); loadProducts();
+}
+
+async function deleteProduct(id){
+  if(!confirm('Delete this product?')) return;
+  await apiCall(`/seller/products/${id}/`,'DELETE');
+  showToast('Product deleted');
+  loadProducts();
+}
+
+function detectLocation(){
+  navigator.geolocation.getCurrentPosition(pos=>{
+    document.getElementById('shop-lat').value=pos.coords.latitude.toFixed(6);
+    document.getElementById('shop-lng').value=pos.coords.longitude.toFixed(6);
+    showToast('Location detected! 📍');
+  },()=>showToast('Could not get location','error'));
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+loadOverview();
+</script>
+</body>
+</html>
