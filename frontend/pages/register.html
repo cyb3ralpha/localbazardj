@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Register — Local Bazar</title>
+<link rel="stylesheet" href="../assets/css/global.css">
+<style>
+body{background:var(--surface);display:flex;flex-direction:column;min-height:100vh;}
+.auth-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 16px;}
+.auth-card{background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);width:100%;max-width:480px;overflow:hidden;}
+.auth-header{background:linear-gradient(135deg,#0F1117,#1E2230);padding:36px 40px 28px;text-align:center;}
+.auth-logo{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;color:var(--saffron);margin-bottom:4px;}
+.auth-header p{color:rgba(255,255,255,.5);font-size:.875rem;}
+.auth-body{padding:32px 40px;}
+.auth-footer{text-align:center;padding:0 40px 28px;font-size:.875rem;color:var(--muted);}
+.auth-footer a{color:var(--saffron);font-weight:600;}
+.role-picker{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;}
+.role-option{border:2px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;cursor:pointer;transition:var(--trans);}
+.role-option:hover,.role-option.selected{border-color:var(--saffron);background:var(--saffron-pale);}
+.role-option .role-ico{font-size:1.6rem;margin-bottom:6px;}
+.role-option .role-name{font-weight:600;font-size:.875rem;color:var(--ink);}
+.role-option .role-desc{font-size:.72rem;color:var(--muted);margin-top:2px;}
+</style>
+</head>
+<body>
+<nav class="navbar"><div class="navbar-inner"><a href="../index.html" class="navbar-logo">🛒 Local<span>Bazar</span></a></div></nav>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="auth-logo">🛒 Join LocalBazar</div>
+      <p>Create your account today</p>
+    </div>
+    <div class="auth-body">
+      <div id="error-msg" style="display:none;background:#FEE2E2;color:#991B1B;padding:12px 16px;border-radius:var(--radius-sm);margin-bottom:16px;font-size:.875rem;"></div>
+      <p style="font-size:.875rem;font-weight:600;color:var(--slate);margin-bottom:12px;">I want to join as:</p>
+      <div class="role-picker">
+        <div class="role-option selected" data-role="customer" onclick="selectRole(this)">
+          <div class="role-ico">🛍️</div><div class="role-name">Customer</div><div class="role-desc">Buy from local shops</div>
+        </div>
+        <div class="role-option" data-role="seller" onclick="selectRole(this)">
+          <div class="role-ico">🏪</div><div class="role-name">Seller</div><div class="role-desc">List my shop & products</div>
+        </div>
+      </div>
+      <div class="grid-2" style="gap:12px;">
+        <div class="form-group"><label class="form-label">Username *</label><input type="text" id="username" class="form-control" placeholder="johndoe"></div>
+        <div class="form-group"><label class="form-label">Phone</label><input type="tel" id="phone" class="form-control" placeholder="03001234567"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Email *</label><input type="email" id="email" class="form-control" placeholder="john@example.com"></div>
+      <div class="form-group"><label class="form-label">Password *</label><input type="password" id="password" class="form-control" placeholder="Min 8 characters"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;border-radius:var(--radius-sm);" id="reg-btn" onclick="register()">Create Account</button>
+    </div>
+    <div class="auth-footer">Already have an account? <a href="login.html">Sign In</a></div>
+  </div>
+</div>
+<script src="../assets/js/config.js"></script>
+<script>
+let selectedRole='customer';
+function selectRole(el){
+  document.querySelectorAll('.role-option').forEach(x=>x.classList.remove('selected'));
+  el.classList.add('selected'); selectedRole=el.dataset.role;
+}
+async function register(){
+  const username=document.getElementById('username').value.trim();
+  const email=document.getElementById('email').value.trim();
+  const password=document.getElementById('password').value;
+  const phone=document.getElementById('phone').value.trim();
+  if(!username||!email||!password){showErr('Please fill required fields');return;}
+  if(password.length<8){showErr('Password must be at least 8 characters');return;}
+  const btn=document.getElementById('reg-btn');
+  btn.disabled=true; btn.textContent='Creating account…';
+  const r=await apiCall('/auth/register/','POST',{username,email,password,role:selectedRole,phone});
+  btn.disabled=false; btn.textContent='Create Account';
+  if(!r||!r.ok){
+    const errs=r?.data;
+    const msg=typeof errs==='object'?Object.values(errs).flat().join(' '):errs?.detail||'Registration failed';
+    showErr(msg); return;
+  }
+  Auth.setAuth(r.data.access,r.data.refresh,r.data.user);
+  showToast('Account created! Welcome to LocalBazar 🎉');
+  setTimeout(()=>{ window.location.href=r.data.user.role==='seller'?'seller-dashboard.html':'../index.html'; },800);
+}
+function showErr(msg){const e=document.getElementById('error-msg');e.textContent=msg;e.style.display='block';}
+</script>
+</body>
+</html>

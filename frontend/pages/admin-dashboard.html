@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Admin Dashboard — Local Bazar</title>
+<link rel="stylesheet" href="../assets/css/global.css">
+<style>
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity .2s;}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal{background:#fff;border-radius:20px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);transform:translateY(20px);transition:transform .25s;}
+.modal-overlay.open .modal{transform:translateY(0);}
+.modal-header{padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.modal-body{padding:0 24px 24px;}
+.action-btn{padding:5px 12px;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;border:none;transition:all .15s;}
+.action-btn-green{background:#D1FAE5;color:#065F46;} .action-btn-green:hover{background:#A7F3D0;}
+.action-btn-red{background:#FEE2E2;color:#991B1B;} .action-btn-red:hover{background:#FECACA;}
+.action-btn-blue{background:#DBEAFE;color:#1E40AF;} .action-btn-blue:hover{background:#BFDBFE;}
+.action-btn-yellow{background:#FEF3C7;color:#92400E;} .action-btn-yellow:hover{background:#FDE68A;}
+.role-badge{padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;text-transform:uppercase;}
+.role-admin{background:#EDE9FE;color:#5B21B6;} .role-seller{background:#D1FAE5;color:#065F46;}
+.role-employee{background:#DBEAFE;color:#1E40AF;} .role-customer{background:var(--surface);color:var(--muted);}
+.section-tabs{display:flex;background:var(--surface);border-radius:var(--radius-sm);padding:4px;gap:4px;margin-bottom:24px;}
+.section-tab{padding:8px 16px;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--muted);transition:var(--trans);}
+.section-tab.active{background:var(--white);color:var(--saffron);box-shadow:var(--shadow);}
+</style>
+</head>
+<body>
+<div class="dashboard-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">🛒 LocalBazar<span id="role-label">Admin Panel</span></div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Dashboard</div>
+        <button class="sidebar-link active" onclick="showTab('overview',this)"><span class="icon">📊</span> Overview</button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Management</div>
+        <button class="sidebar-link" onclick="showTab('users',this)" id="users-tab-btn"><span class="icon">👥</span> Users</button>
+        <button class="sidebar-link" onclick="showTab('shops',this)"><span class="icon">🏪</span> Shops</button>
+        <button class="sidebar-link" onclick="showTab('products',this)"><span class="icon">📦</span> Products</button>
+        <button class="sidebar-link" onclick="showTab('reviews',this)"><span class="icon">⭐</span> Reviews</button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Navigation</div>
+        <a class="sidebar-link" href="../index.html"><span class="icon">🌐</span> View Site</a>
+        <a class="sidebar-link" href="seller-dashboard.html"><span class="icon">🏪</span> Seller View</a>
+        <button class="sidebar-link" onclick="Auth.logout()"><span class="icon">🚪</span> Logout</button>
+      </div>
+    </nav>
+    <div class="sidebar-footer"><div style="font-size:.75rem;color:rgba(255,255,255,.3);" id="admin-info">Loading…</div></div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- OVERVIEW -->
+    <div id="tab-overview">
+      <div class="page-header"><div class="page-title">Platform Overview</div><div class="page-subtitle">Real-time stats for Local Bazar</div></div>
+      <div class="grid-4" style="margin-bottom:28px;" id="stats-grid">
+        <div class="loading-center" style="grid-column:1/-1;"><div class="spinner"></div></div>
+      </div>
+      <div class="grid-2" style="gap:24px;">
+        <div class="card" style="padding:24px;">
+          <h3 style="font-family:'Syne',sans-serif;margin-bottom:16px;">📋 Quick Actions</h3>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button class="btn btn-primary btn-sm" onclick="showTab('shops',null);filterShops('pending')">⏳ Review Pending Shops</button>
+            <button class="btn btn-outline btn-sm" onclick="showTab('reviews',null);loadReviews(true)">🚩 View Flagged Reviews</button>
+            <button class="btn btn-ghost btn-sm" onclick="showTab('users',null)">👥 Manage Users</button>
+          </div>
+        </div>
+        <div class="card" style="padding:24px;">
+          <h3 style="font-family:'Syne',sans-serif;margin-bottom:16px;">🔐 Role Permissions</h3>
+          <div style="font-size:.85rem;display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;"><span><span class="role-badge role-admin">Admin</span></span><span style="color:var(--muted);">Full access</span></div>
+            <div style="display:flex;justify-content:space-between;"><span><span class="role-badge role-employee">Employee</span></span><span style="color:var(--muted);">Shops & moderation</span></div>
+            <div style="display:flex;justify-content:space-between;"><span><span class="role-badge role-seller">Seller</span></span><span style="color:var(--muted);">Own shops & products</span></div>
+            <div style="display:flex;justify-content:space-between;"><span><span class="role-badge role-customer">Customer</span></span><span style="color:var(--muted);">Browse & review</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div id="tab-users" style="display:none;">
+      <div class="page-header flex-between">
+        <div><div class="page-title">User Management</div><div class="page-subtitle">All registered users</div></div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="user-search" class="form-control" style="width:200px;" placeholder="Search users…" oninput="searchUsers(this.value)">
+          <select class="filter-select" id="role-filter" onchange="loadUsers()">
+            <option value="">All Roles</option><option value="customer">Customers</option>
+            <option value="seller">Sellers</option><option value="employee">Employees</option><option value="admin">Admins</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+          <tbody id="users-tbody"><tr><td colspan="6" style="text-align:center;padding:32px;"><div class="spinner" style="margin:auto;"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SHOPS -->
+    <div id="tab-shops" style="display:none;">
+      <div class="page-header flex-between">
+        <div><div class="page-title">Shop Management</div><div class="page-subtitle">Verify and manage all shops</div></div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="shop-search" class="form-control" style="width:200px;" placeholder="Search shops…" oninput="searchShops(this.value)">
+          <select class="filter-select" id="shop-status-filter" onchange="loadShops()">
+            <option value="">All</option><option value="verified">Verified</option><option value="pending">Pending</option><option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Shop</th><th>Owner</th><th>City</th><th>Products</th><th>Rating</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="shops-tbody"><tr><td colspan="7" style="text-align:center;padding:32px;"><div class="spinner" style="margin:auto;"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PRODUCTS -->
+    <div id="tab-products" style="display:none;">
+      <div class="page-header"><div class="page-title">All Products</div><div class="page-subtitle">Monitor all product listings</div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Product</th><th>Shop</th><th>Price</th><th>Category</th><th>Stock</th><th>Actions</th></tr></thead>
+          <tbody id="admin-products-tbody"><tr><td colspan="6" style="text-align:center;padding:32px;"><div class="spinner" style="margin:auto;"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- REVIEWS -->
+    <div id="tab-reviews" style="display:none;">
+      <div class="page-header flex-between">
+        <div><div class="page-title">Review Moderation</div><div class="page-subtitle">Manage customer reviews</div></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="loadReviews(false)">All Reviews</button>
+          <button class="btn btn-danger btn-sm" onclick="loadReviews(true)">🚩 Flagged Only</button>
+        </div>
+      </div>
+      <div id="reviews-container"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Assign Employee Modal -->
+<div class="modal-overlay" id="assign-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Assign Employee to Shop</div><button class="modal-close" onclick="closeModal('assign-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="assign-shop-id">
+      <div class="form-group">
+        <label class="form-label">Select Employee</label>
+        <select id="assign-user-id" class="form-control form-select"></select>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="assignEmployee()">Assign Employee</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Role Modal -->
+<div class="modal-overlay" id="role-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Change User Role</div><button class="modal-close" onclick="closeModal('role-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="role-user-id">
+      <div class="form-group">
+        <label class="form-label">New Role</label>
+        <select id="new-role" class="form-control form-select">
+          <option value="customer">Customer</option><option value="seller">Seller</option>
+          <option value="employee">Employee</option><option value="admin">Admin</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="changeRole()">Update Role</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script>
+const user=Auth.getUser();
+if(!user||!['admin','employee'].includes(user.role)){window.location.href='login.html';}
+document.getElementById('admin-info').textContent=user.username+' · '+user.role;
+document.getElementById('role-label').textContent=user.role==='admin'?'Admin Panel':'Employee Panel';
+// Hide user management for employees
+if(user.role==='employee') document.getElementById('users-tab-btn').style.display='none';
+
+let allUsers=[], allShops=[];
+
+function showTab(name,btn){
+  ['overview','users','shops','products','reviews'].forEach(t=>{const el=document.getElementById('tab-'+t);if(el)el.style.display='none';});
+  document.getElementById('tab-'+name).style.display='block';
+  document.querySelectorAll('.sidebar-link').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(name==='overview') loadStats();
+  if(name==='users') loadUsers();
+  if(name==='shops') loadShops();
+  if(name==='products') loadAdminProducts();
+  if(name==='reviews') loadReviews(false);
+}
+
+async function loadStats(){
+  const r=await apiCall('/admin/stats/');
+  if(!r||!r.ok) return;
+  const s=r.data;
+  document.getElementById('stats-grid').innerHTML=`
+    <div class="stat-card"><div class="stat-icon" style="background:#FFF0E8">👥</div><div><div class="stat-value">${s.total_users}</div><div class="stat-label">Total Users</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:#E8F5F0">🏪</div><div><div class="stat-value">${s.total_shops}</div><div class="stat-label">Shops <span style="color:var(--warning);font-size:.7rem;">(${s.pending_shops} pending)</span></div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:#DBEAFE">📦</div><div><div class="stat-value">${s.total_products}</div><div class="stat-label">Products</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:#FEF3C7">⭐</div><div><div class="stat-value">${s.total_reviews}</div><div class="stat-label">Reviews <span style="color:var(--danger);font-size:.7rem;">(${s.flagged_reviews} flagged)</span></div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:#EDE9FE">🏪</div><div><div class="stat-value">${s.total_sellers}</div><div class="stat-label">Sellers</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:#D1FAE5">👷</div><div><div class="stat-value">${s.total_employees}</div><div class="stat-label">Employees</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:#FEF3C7">✅</div><div><div class="stat-value">${s.verified_shops}</div><div class="stat-label">Verified Shops</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:#FEE2E2">🆕</div><div><div class="stat-value">${s.new_users_30d}</div><div class="stat-label">New Users (30d)</div></div></div>
+  `;
+}
+
+async function loadUsers(){
+  const role=document.getElementById('role-filter')?.value||'';
+  let url='/admin/users/?';
+  if(role) url+=`role=${role}&`;
+  const r=await apiCall(url);
+  if(!r||!r.ok) return;
+  allUsers=r.data.results||r.data;
+  renderUsersTable(allUsers);
+}
+
+function searchUsers(q){
+  if(!q) renderUsersTable(allUsers);
+  else renderUsersTable(allUsers.filter(u=>u.username.toLowerCase().includes(q.toLowerCase())||u.email.toLowerCase().includes(q.toLowerCase())));
+}
+
+function renderUsersTable(users){
+  if(!users.length){ document.getElementById('users-tbody').innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">No users found</td></tr>'; return; }
+  document.getElementById('users-tbody').innerHTML=users.map(u=>`
+    <tr>
+      <td><div style="font-weight:600;">${u.username}</div><div style="font-size:.75rem;color:var(--muted);">#${u.id}</div></td>
+      <td style="font-size:.85rem;">${u.email}</td>
+      <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+      <td><span class="badge ${u.is_active?'badge-green':'badge-red'}">${u.is_active?'Active':'Inactive'}</span></td>
+      <td style="font-size:.8rem;color:var(--muted);">${new Date(u.created_at).toLocaleDateString()}</td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${u.is_active?`<button class="action-btn action-btn-red" onclick="userAction(${u.id},'deactivate')">Deactivate</button>`:`<button class="action-btn action-btn-green" onclick="userAction(${u.id},'activate')">Activate</button>`}
+          ${!u.is_verified?`<button class="action-btn action-btn-green" onclick="userAction(${u.id},'verify')">Verify</button>`:''}
+          <button class="action-btn action-btn-blue" onclick="openRoleModal(${u.id})">Role</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function userAction(id,action){
+  const r=await apiCall(`/admin/users/${id}/action/`,'PATCH',{action});
+  if(!r||!r.ok){showToast('Action failed','error');return;}
+  showToast('User updated!'); loadUsers();
+}
+
+function openRoleModal(id){ document.getElementById('role-user-id').value=id; document.getElementById('role-modal').classList.add('open'); }
+async function changeRole(){
+  const id=document.getElementById('role-user-id').value;
+  const role=document.getElementById('new-role').value;
+  const r=await apiCall(`/admin/users/${id}/action/`,'PATCH',{action:'change_role',role});
+  if(!r||!r.ok){showToast('Failed','error');return;}
+  showToast('Role updated!'); closeModal('role-modal'); loadUsers();
+}
+
+async function loadShops(){
+  const status=document.getElementById('shop-status-filter')?.value||'';
+  let url='/admin/shops/?';
+  if(status) url+=`status=${status}&`;
+  const r=await apiCall(url);
+  if(!r||!r.ok) return;
+  allShops=r.data.results||r.data;
+  renderShopsTable(allShops);
+}
+
+function filterShops(status){ document.getElementById('shop-status-filter').value=status; loadShops(); showTab('shops',null); }
+
+function searchShops(q){
+  if(!q) renderShopsTable(allShops);
+  else renderShopsTable(allShops.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())));
+}
+
+function renderShopsTable(shops){
+  if(!shops.length){ document.getElementById('shops-tbody').innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">No shops found</td></tr>'; return; }
+  document.getElementById('shops-tbody').innerHTML=shops.map(s=>`
+    <tr>
+      <td><div style="font-weight:600;">${s.name}</div><div style="font-size:.75rem;color:var(--muted);">📍 ${s.city}</div></td>
+      <td style="font-size:.85rem;">${s.owner_name}</td>
+      <td style="font-size:.85rem;">${s.city}</td>
+      <td style="text-align:center;">${s.product_count||0}</td>
+      <td>${'★'.repeat(Math.round(s.avg_rating||0))} ${s.avg_rating||0}</td>
+      <td>
+        <span class="badge ${s.is_active?(s.is_verified?'badge-green':'badge-yellow'):'badge-red'}">
+          ${s.is_active?(s.is_verified?'Verified':'Pending'):'Inactive'}
+        </span>
+      </td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${!s.is_verified?`<button class="action-btn action-btn-green" onclick="shopAction(${s.id},'verify')">✓ Verify</button>`:`<button class="action-btn action-btn-yellow" onclick="shopAction(${s.id},'unverify')">Unverify</button>`}
+          ${s.is_active?`<button class="action-btn action-btn-red" onclick="shopAction(${s.id},'deactivate')">Deactivate</button>`:`<button class="action-btn action-btn-green" onclick="shopAction(${s.id},'activate')">Activate</button>`}
+          <button class="action-btn action-btn-blue" onclick="openAssignModal(${s.id})">Employee</button>
+          <a href="shop.html?id=${s.id}" class="action-btn action-btn-blue">View</a>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function shopAction(id,action){
+  const r=await apiCall(`/admin/shops/${id}/action/`,'PATCH',{action});
+  if(!r||!r.ok){showToast('Action failed','error');return;}
+  showToast('Shop updated!'); loadShops();
+}
+
+async function openAssignModal(shopId){
+  document.getElementById('assign-shop-id').value=shopId;
+  const r=await apiCall('/admin/users/?role=employee');
+  if(r&&r.ok){
+    const emps=r.data.results||r.data;
+    document.getElementById('assign-user-id').innerHTML=emps.length?
+      emps.map(e=>`<option value="${e.id}">${e.username} (${e.email})</option>`).join(''):
+      '<option>No employees found</option>';
+  }
+  // Also show all users as possible employees
+  const allR=await apiCall('/admin/users/');
+  if(allR&&allR.ok){
+    const all=allR.data.results||allR.data;
+    document.getElementById('assign-user-id').innerHTML=all.map(u=>`<option value="${u.id}">${u.username} — ${u.role}</option>`).join('');
+  }
+  document.getElementById('assign-modal').classList.add('open');
+}
+
+async function assignEmployee(){
+  const shopId=document.getElementById('assign-shop-id').value;
+  const userId=document.getElementById('assign-user-id').value;
+  const r=await apiCall(`/admin/shops/${shopId}/assign-employee/`,'POST',{user_id:userId});
+  if(!r||!r.ok){showToast('Failed','error');return;}
+  showToast('Employee assigned! 👷'); closeModal('assign-modal');
+}
+
+async function loadAdminProducts(){
+  const r=await apiCall('/seller/products/');
+  if(!r||!r.ok) return;
+  const products=r.data.results||r.data;
+  document.getElementById('admin-products-tbody').innerHTML=products.length?products.map(p=>`
+    <tr>
+      <td><div style="font-weight:600;">${p.name}</div></td>
+      <td>${p.shop_name||'—'}</td>
+      <td style="font-weight:600;color:var(--saffron);">${formatPrice(p.price)}</td>
+      <td><span class="badge badge-gray">${p.category_name||'—'}</span></td>
+      <td><span class="badge-stock ${p.in_stock?'in':'out'}">${p.in_stock?'In Stock':'Out'}</span></td>
+      <td><button class="action-btn action-btn-red" onclick="deleteProduct(${p.id})">Delete</button></td>
+    </tr>`).join(''):
+    '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">No products</td></tr>';
+}
+
+async function deleteProduct(id){
+  if(!confirm('Delete this product?')) return;
+  await apiCall(`/seller/products/${id}/`,'DELETE');
+  showToast('Deleted'); loadAdminProducts();
+}
+
+async function loadReviews(flaggedOnly=false){
+  const url='/admin/reviews/?'+(flaggedOnly?'flagged=true':'');
+  const r=await apiCall(url);
+  if(!r||!r.ok) return;
+  const reviews=r.data.results||r.data;
+  document.getElementById('reviews-container').innerHTML=reviews.length?
+    `<div style="display:flex;flex-direction:column;gap:12px;">${reviews.map(rv=>`
+      <div style="background:#fff;border:1px solid ${rv.is_flagged?'#FCA5A5':'var(--border)'};border-radius:var(--radius);padding:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+          <div>
+            <strong>${rv.username}</strong> <span style="color:var(--muted);font-size:.8rem;">on shop #${rv.shop}</span>
+            ${rv.is_flagged?'<span class="badge badge-red" style="margin-left:8px;">🚩 Flagged</span>':''}
+          </div>
+          <div>${'★'.repeat(rv.rating)}</div>
+        </div>
+        <p style="font-size:.875rem;color:var(--slate);margin-bottom:10px;">${rv.comment}</p>
+        <div style="display:flex;gap:8px;">
+          <button class="action-btn action-btn-red" onclick="deleteReview(${rv.id})">🗑 Delete</button>
+          <button class="action-btn ${rv.is_flagged?'action-btn-green':'action-btn-yellow'}" onclick="toggleFlag(${rv.id})">${rv.is_flagged?'✓ Unflag':'🚩 Flag'}</button>
+        </div>
+      </div>`).join('')}</div>`:
+    '<div class="empty-state"><div class="icon">⭐</div><h3>No reviews</h3></div>';
+}
+
+async function deleteReview(id){
+  if(!confirm('Delete this review?')) return;
+  await apiCall(`/admin/reviews/${id}/`,'DELETE');
+  showToast('Review deleted'); loadReviews();
+}
+
+async function toggleFlag(id){
+  await apiCall(`/admin/reviews/${id}/`,'PATCH');
+  showToast('Updated'); loadReviews();
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+loadStats();
+</script>
+</body>
+</html>

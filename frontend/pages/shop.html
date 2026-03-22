@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Shop — Local Bazar</title>
+<link rel="stylesheet" href="../assets/css/global.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+.shop-cover{height:240px;background:linear-gradient(135deg,#FF6B2B33,#1A7A5E22);display:flex;align-items:center;justify-content:center;font-size:5rem;position:relative;}
+.shop-profile-card{background:var(--white);border-radius:var(--radius-lg);border:1px solid var(--border);margin:-60px 0 0;position:relative;z-index:1;padding:24px;}
+.shop-name{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800;margin-bottom:8px;}
+.shop-layout{display:grid;grid-template-columns:1fr 360px;gap:28px;max-width:1200px;margin:28px auto;padding:0 24px;}
+.sidebar-box{background:var(--white);border-radius:var(--radius);border:1px solid var(--border);padding:20px;margin-bottom:20px;}
+.sidebar-box h3{font-family:'Syne',sans-serif;font-size:1rem;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);}
+.info-row{display:flex;gap:10px;font-size:.875rem;padding:8px 0;border-bottom:1px solid var(--surface);}
+.info-row:last-child{border:none;}
+.info-label{color:var(--muted);min-width:80px;}
+.info-val{font-weight:500;color:var(--ink);}
+#shop-map{height:200px;border-radius:var(--radius-sm);}
+.review-form{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:24px;}
+.star-input{display:flex;gap:4px;margin-bottom:12px;}
+.star-input span{font-size:1.8rem;cursor:pointer;color:var(--border);transition:color .15s;}
+.star-input span.on{color:var(--warning);}
+.review-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;}
+@media(max-width:900px){.shop-layout{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="navbar-inner">
+    <a href="../index.html" class="navbar-logo">🛒 Local<span>Bazar</span></a>
+    <div class="navbar-links"><a href="../index.html">Home</a><a href="search.html">Search</a></div>
+    <div class="navbar-actions" id="nav-actions"><a href="login.html" class="btn-nav-login">Sign In</a></div>
+  </div>
+</nav>
+
+<div id="shop-cover" class="shop-cover">🏪</div>
+
+<div class="shop-layout">
+  <div>
+    <!-- Shop Card -->
+    <div class="shop-profile-card" id="shop-card">
+      <div class="loading-center"><div class="spinner"></div></div>
+    </div>
+
+    <!-- Products -->
+    <div style="margin-top:28px;">
+      <div class="flex-between" style="margin-bottom:16px;">
+        <h2 style="font-family:'Syne',sans-serif;font-size:1.3rem;">Products</h2>
+        <select class="form-control form-select" style="width:auto;padding:8px 32px 8px 12px;" onchange="filterProducts(this.value)">
+          <option value="">All Products</option><option value="true">In Stock</option><option value="false">Out of Stock</option>
+        </select>
+      </div>
+      <div id="products-grid" class="grid-auto"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- Reviews -->
+    <div style="margin-top:36px;">
+      <h2 style="font-family:'Syne',sans-serif;font-size:1.3rem;margin-bottom:20px;">Customer Reviews</h2>
+      <div class="review-form" id="review-form" style="display:none;">
+        <h3 style="font-family:'Syne',sans-serif;font-size:1rem;margin-bottom:12px;">Leave a Review</h3>
+        <div class="star-input" id="star-input">
+          <span onclick="setRating(1)">★</span><span onclick="setRating(2)">★</span><span onclick="setRating(3)">★</span>
+          <span onclick="setRating(4)">★</span><span onclick="setRating(5)">★</span>
+        </div>
+        <textarea id="review-comment" class="form-control" rows="3" placeholder="Share your experience…" style="margin-bottom:12px;"></textarea>
+        <button class="btn btn-primary btn-sm" onclick="submitReview()">Submit Review</button>
+      </div>
+      <div id="reviews-list"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="shop-sidebar"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../assets/js/config.js"></script>
+<script>
+const shopId=new URLSearchParams(location.search).get('id');
+let shopData, allProducts=[], reviewRating=0;
+
+if(!shopId) window.location.href='../index.html';
+
+(function initNav(){
+  const user=Auth.getUser();
+  if(user){
+    document.getElementById('nav-actions').innerHTML=`<a href="${user.role==='seller'?'seller-dashboard.html':'../index.html'}" class="user-avatar">${user.username[0].toUpperCase()}</a>`;
+    if(Auth.isLoggedIn()) document.getElementById('review-form').style.display='block';
+  }
+})();
+
+async function loadShop(){
+  const r=await apiCall(`/shops/${shopId}/`);
+  if(!r||!r.ok){ document.getElementById('shop-card').innerHTML='<div class="empty-state"><h3>Shop not found</h3></div>'; return; }
+  shopData=r.data;
+  document.title=`${shopData.name} — Local Bazar`;
+  renderShopCard();
+  renderSidebar();
+  loadProducts();
+  loadReviews();
+}
+
+function renderShopCard(){
+  const s=shopData;
+  document.getElementById('shop-card').innerHTML=`
+    <div style="display:flex;align-items:start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+      <div>
+        <div class="shop-name">${s.name} ${s.is_verified?'<span class="badge badge-green">✓ Verified</span>':''}</div>
+        <div style="color:var(--muted);font-size:.9rem;margin-bottom:12px;">📍 ${s.address}, ${s.city}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span>${starRating(s.avg_rating)}</span>
+          <span style="font-weight:700;">${s.avg_rating}</span>
+          <span style="color:var(--muted);font-size:.85rem;">(${s.review_count} reviews)</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}" target="_blank" class="btn btn-primary">🧭 Get Directions</a>
+        ${s.phone?`<a href="tel:${s.phone}" class="btn btn-outline">📞 Call</a>`:''}
+        ${s.whatsapp?`<a href="https://wa.me/${s.whatsapp}" target="_blank" class="btn btn-success">💬 WhatsApp</a>`:''}
+      </div>
+    </div>
+    ${s.description?`<p style="margin-top:16px;color:var(--slate);font-size:.9rem;">${s.description}</p>`:''}
+  `;
+}
+
+function starRating(r){let h='';for(let i=1;i<=5;i++)h+=`<span style="color:${i<=r?'#F59E0B':'#ddd'}">★</span>`;return h;}
+
+function renderSidebar(){
+  const s=shopData;
+  document.getElementById('shop-sidebar').innerHTML=`
+    <div class="sidebar-box">
+      <h3>📋 Shop Info</h3>
+      <div class="info-row"><span class="info-label">Phone</span><span class="info-val">${s.phone||'—'}</span></div>
+      <div class="info-row"><span class="info-label">WhatsApp</span><span class="info-val">${s.whatsapp||'—'}</span></div>
+      <div class="info-row"><span class="info-label">City</span><span class="info-val">${s.city}</span></div>
+      <div class="info-row"><span class="info-label">Hours</span><span class="info-val">${s.opening_time&&s.closing_time?s.opening_time+' – '+s.closing_time:'Not specified'}</span></div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-val badge ${s.is_verified?'badge-green':'badge-yellow'}">${s.is_verified?'Verified':'Unverified'}</span></div>
+    </div>
+    <div class="sidebar-box">
+      <h3>📍 Location</h3>
+      <div id="shop-map" style="height:200px;border-radius:var(--radius-sm);margin-bottom:12px;"></div>
+      <a href="https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}" target="_blank" class="btn btn-primary" style="width:100%;justify-content:center;">🧭 Get Directions</a>
+    </div>
+  `;
+  // Init mini map
+  setTimeout(()=>{
+    const m=L.map('shop-map').setView([s.latitude,s.longitude],15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(m);
+    L.marker([s.latitude,s.longitude]).addTo(m).bindPopup(s.name).openPopup();
+  },100);
+}
+
+async function loadProducts(){
+  const r=await apiCall(`/shops/${shopId}/products/`);
+  if(!r||!r.ok) return;
+  allProducts=r.data.results||r.data;
+  renderProducts(allProducts);
+}
+
+function filterProducts(val){
+  if(val==='') renderProducts(allProducts);
+  else if(val==='true') renderProducts(allProducts.filter(p=>p.in_stock));
+  else renderProducts(allProducts.filter(p=>!p.in_stock));
+}
+
+function renderProducts(products){
+  if(!products.length){ document.getElementById('products-grid').innerHTML='<div class="empty-state"><div class="icon">📦</div><h3>No products yet</h3></div>'; return; }
+  document.getElementById('products-grid').innerHTML=products.map(p=>`
+    <div class="card product-card">
+      <div style="height:140px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:2.5rem;">📦</div>
+      <div class="card-body">
+        <div class="card-title">${p.name}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+          <span class="price">${formatPrice(p.price)}</span>
+          <span class="badge-stock ${p.in_stock?'in':'out'}">${p.in_stock?'In Stock':'Out'}</span>
+        </div>
+        ${p.description?`<p style="font-size:.78rem;color:var(--muted);margin-top:6px;">${p.description}</p>`:''}
+      </div>
+    </div>`).join('');
+}
+
+async function loadReviews(){
+  const r=await apiCall(`/shops/${shopId}/reviews/`);
+  if(!r||!r.ok){ document.getElementById('reviews-list').innerHTML=''; return; }
+  const revs=r.data.results||r.data;
+  if(!revs.length){ document.getElementById('reviews-list').innerHTML='<div class="empty-state"><div class="icon">⭐</div><h3>No reviews yet</h3><p>Be the first to review!</p></div>'; return; }
+  document.getElementById('reviews-list').innerHTML=revs.map(rv=>`
+    <div class="review-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="user-avatar" style="width:32px;height:32px;font-size:.75rem;">${rv.username[0].toUpperCase()}</div>
+          <strong>${rv.username}</strong>
+        </div>
+        <div>${starRating(rv.rating)}</div>
+      </div>
+      <p style="font-size:.875rem;color:var(--slate);">${rv.comment}</p>
+      <div style="font-size:.75rem;color:var(--muted);margin-top:6px;">${timeSince(rv.created_at)}</div>
+    </div>`).join('');
+}
+
+function setRating(r){
+  reviewRating=r;
+  document.querySelectorAll('#star-input span').forEach((s,i)=>s.classList.toggle('on',i<r));
+}
+
+async function submitReview(){
+  if(!reviewRating){ showToast('Please select a rating','error'); return; }
+  const comment=document.getElementById('review-comment').value.trim();
+  if(!comment){ showToast('Please write a comment','error'); return; }
+  const r=await apiCall(`/shops/${shopId}/reviews/`,'POST',{rating:reviewRating,comment});
+  if(!r||!r.ok){ showToast(r?.data?.detail||'Could not submit review','error'); return; }
+  showToast('Review submitted! ⭐');
+  document.getElementById('review-comment').value=''; setRating(0);
+  loadReviews();
+}
+
+loadShop();
+</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+web: gunicorn localbazar.wsgi --log-file -
