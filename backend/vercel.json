@@ -4,6 +4,7 @@
     {
       "src": "localbazar/wsgi.py",
       "use": "@vercel/python",
+<<<<<<< HEAD
       "config": {
         "maxLambdaSize": "15mb",
         "runtime": "python3.12"
@@ -16,6 +17,12 @@
     { "src": "/admin", "dest": "localbazar/wsgi.py" },
     { "src": "/static/(.*)", "dest": "localbazar/wsgi.py" },
     { "src": "/media/(.*)", "dest": "localbazar/wsgi.py" },
+=======
+      "config": { "maxLambdaSize": "15mb", "runtime": "python3.11" }
+    }
+  ],
+  "routes": [
+>>>>>>> 6a4e5b39b9e9a60daa2fe6a8179104db3b7acdfd
     { "src": "/(.*)", "dest": "localbazar/wsgi.py" }
   ]
 }
