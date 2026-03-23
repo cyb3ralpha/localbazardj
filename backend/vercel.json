@@ -1,20 +1,15 @@
 {
   "version": 2,
-  "builds": [{
-    "src": "localbazar/wsgi.py",
-    "use": "@vercel/python"
-  }],
-  "routes": [{
-    "src": "/(.*)",
-    "dest": "localbazar/wsgi.py"
-  }]
-}
+  "builds": [
+    {
+      "src": "localbazar/wsgi.py",
+      "use": "@vercel/python"
+    }
+  ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "localbazar/wsgi.py" },
-    { "src": "/admin/(.*)", "dest": "localbazar/wsgi.py" },
-    { "src": "/admin", "dest": "localbazar/wsgi.py" },
-    { "src": "/static/(.*)", "dest": "localbazar/wsgi.py" },
-    { "src": "/media/(.*)", "dest": "localbazar/wsgi.py" },
-    { "src": "/(.*)", "dest": "localbazar/wsgi.py" }
+    {
+      "src": "/(.*)",
+      "dest": "localbazar/wsgi.py"
+    }
   ]
 }
