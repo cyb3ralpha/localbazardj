@@ -5,23 +5,26 @@ from datetime import timedelta
 BASE_DIR = Path(__file__).resolve().parent.parent
 <<<<<<< HEAD
 
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-localbazar-change-in-production-xyz123')
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-localbazar-change-in-production-xyz123'
+)
 
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-# Accept all Vercel domains + localhost + custom domains
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    '0.0.0.0',
-    '.vercel.app',          # covers *.vercel.app
-    '.now.sh',
-]
+ALLOWED_HOSTS = os.environ.get(
+    'ALLOWED_HOSTS',
+    'localhost,127.0.0.1,0.0.0.0,.vercel.app,.now.sh'
+).split(',')
 
-# Add any extra hosts from env var (e.g. your custom domain)
-EXTRA_HOSTS = os.environ.get('ALLOWED_HOSTS', '')
-if EXTRA_HOSTS:
-    ALLOWED_HOSTS += [h.strip() for h in EXTRA_HOSTS.split(',') if h.strip()]
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
+# Trust Vercel proxy (IMPORTANT for HTTPS)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 =======
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-localbazar-change-in-production-xyz123')
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
